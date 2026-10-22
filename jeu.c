@@ -766,6 +766,8 @@ void JcJ(){
   Joueur j1;
   Joueur j2;
 
+
+
   initialiserJoueur(&j1);
 
 }*/
