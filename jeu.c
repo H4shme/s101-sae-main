@@ -8,7 +8,9 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>  // [ORDI] rand, srand
 #include <string.h>
+#include <time.h>  // [ORDI] time
 
 /** @brief Taille de la grille carrée */
 #define TAILLE 10
@@ -508,6 +510,29 @@ void placerAuto(Joueur* j) {
 }
 
 /**
+ * @brief [ORDI] Place au hasard les cinq bateaux du robot
+ *
+ * Pour chaque bateau on tire une position et une direction au hasard jusqu a
+ * ce que PlacementPossible accepte (grille de 100 cases : cela finit toujours)
+ * @param j joueur (le robot) dont on place les bateaux
+ */
+void placerAleatoire(Joueur* j) {
+  for (int i = 0; i < NB_TYPE; i++) {
+    int type = i + 1;
+    int ligne, colonne, direction;
+    do {
+      ligne = rand() % TAILLE;
+      colonne = rand() % TAILLE;
+      direction = 1 + rand() % 4;  // 1 haut, 2 droite, 3 bas, 4 gauche
+    } while (!PlacementPossible(j->grille, ligne, colonne, type, direction));
+    PlacerBateau(j->grille, j->bateaux, ligne, colonne, type, direction);
+    j->bateaux[i].ligne = ligne;
+    j->bateaux[i].colonne = colonne;
+    j->bateaux[i].direction = direction;
+  }
+}
+
+/**
  * @brief Guide le joueur pour ajouter un bateau sur sa grille
  * @param tab grille du joueur
  * @param bateau tableau des bateaux du joueur
@@ -659,29 +684,17 @@ void verifierCoulance(Joueur* cible, int typeBateau) {
 }
 
 /**
- * @brief Fait tirer un joueur sur un autre
+ * @brief [ORDI] Applique un tir deja valide sur une case de la cible
  *
- * Le coup est enregistre chez le tireur et la grille modifiee est celle de la
- * cible
+ * Ce code etait dans tire() : il est deplace ici pour que le joueur humain ET
+ * l ordinateur l utilisent. Il met a jour la grille de la cible, les bateaux
+ * coules et l historique des coups du tireur.
  * @param tireur joueur qui tire
  * @param cible joueur qui subit le tir
+ * @param ligne ligne visee (deja verifiee)
+ * @param colonne colonne visee (deja verifiee)
  */
-void tire(Joueur* tireur, Joueur* cible) {
-  int ligne, colonne;
-  bool valide = false;
-
-  while (!valide) {
-    if (!LirePosition(&ligne, &colonne)) {
-      puts("Position hors grille ! Recommencez.");
-      continue;
-    }
-    if (dejaTire(cible, ligne, colonne)) {
-      puts("Vous avez déjà tiré sur cette case ! Recommencez.");
-      continue;
-    }
-    valide = true;
-  }
-
+void appliquerTir(Joueur* tireur, Joueur* cible, int ligne, int colonne) {
   Coup c;
   c.ligne = ligne;
   c.colonne = colonne;
@@ -705,11 +718,58 @@ void tire(Joueur* tireur, Joueur* cible) {
 }
 
 /**
+ * @brief Fait tirer un joueur sur un autre
+ *
+ * Le coup est enregistre chez le tireur et la grille modifiee est celle de la
+ * cible
+ * @param tireur joueur qui tire
+ * @param cible joueur qui subit le tir
+ */
+void tire(Joueur* tireur, Joueur* cible) {
+  int ligne, colonne;
+  bool valide = false;
+
+  while (!valide) {
+    if (!LirePosition(&ligne, &colonne)) {
+      puts("Position hors grille ! Recommencez.");
+      continue;
+    }
+    if (dejaTire(cible, ligne, colonne)) {
+      puts("Vous avez déjà tiré sur cette case ! Recommencez.");
+      continue;
+    }
+    valide = true;
+  }
+
+  appliquerTir(tireur, cible, ligne, colonne);  // [ORDI] avant : le code ici
+}
+
+/**
+ * @brief [ORDI] Tour de l ordinateur : tire au hasard sur une case jamais visee
+ *
+ * Precondition : la cible a encore un bateau intact (sinon aucune case n est
+ * valide). Le tir est ensuite applique par appliquerTir, comme pour un humain.
+ * @param robot joueur ordinateur qui tire
+ * @param cible joueur qui subit le tir
+ */
+void tirOrdinateur(Joueur* robot, Joueur* cible) {
+  int ligne, colonne;
+  do {
+    ligne = rand() % TAILLE;
+    colonne = rand() % TAILLE;
+  } while (dejaTire(cible, ligne, colonne));
+
+  printf("%s tire en %c%d : ", robot->nom, ligne + 'A', colonne);
+  appliquerTir(robot, cible, ligne, colonne);
+}
+
+/**
  * @brief Gere la phase de combat jusqu a la destruction d une flotte
  * @param Joueur1 premier joueur
  * @param Joueur2 second joueur
+ * @param joueur2EstRobot [ORDI] true si Joueur2 est l ordinateur
  */
-void seBattre(Joueur* Joueur1, Joueur* Joueur2) {
+void seBattre(Joueur* Joueur1, Joueur* Joueur2, bool joueur2EstRobot) {
   puts("---- DEBUT DE LA PHASE DE COMBAT ----");
   while (!estPerdu(Joueur1->bateaux) && !estPerdu(Joueur2->bateaux)) {
     printf("%s, à vous de tirer.\n", Joueur1->nom);
@@ -718,12 +778,17 @@ void seBattre(Joueur* Joueur1, Joueur* Joueur2) {
 
     // Anti-Tir si Joueur 1 a detruit Joueur 2
     if (!estPerdu(Joueur2->bateaux)) {
-      printf("%s, à vous de tirer.\n", Joueur2->nom);
-      afficherDeuxTables(Joueur1, Joueur2);
-      tire(Joueur2, Joueur1);
+      if (joueur2EstRobot) {  // [ORDI] le robot tire tout seul
+        tirOrdinateur(Joueur2, Joueur1);
+      } else {
+        printf("%s, à vous de tirer.\n", Joueur2->nom);
+        afficherDeuxTables(Joueur1, Joueur2);
+        tire(Joueur2, Joueur1);
+      }
     }
 
-    cls();
+    // [ORDI] contre le robot on garde l ecran : on doit lire son tir
+    if (!joueur2EstRobot) cls();
 
     // afficherTable(p->grille, true);
     // tire(p);
@@ -752,6 +817,19 @@ void initialiserJoueur(Joueur* j) {
   j->nbCoups = 0;
 }
 
+/**
+ * @brief [ORDI] Demande le mode de jeu
+ * @return true si le joueur 2 est l ordinateur, false pour deux joueurs
+ */
+bool lireModeOrdinateur() {
+  char choix = ' ';
+  while (choix != '1' && choix != '2') {
+    printf("Mode de jeu : 1 = deux joueurs, 2 = contre l'ordinateur : ");
+    if (scanf(" %c", &choix) != 1) return false;  // fin de saisie : JcJ
+  }
+  return choix == '2';
+}
+
 void lireNom(Joueur* j, int numero) {
   char c;
   printf("Nom du joueur %d : ", numero);
@@ -766,8 +844,6 @@ void JcJ(){
   Joueur j1;
   Joueur j2;
 
-
-
   initialiserJoueur(&j1);
 
 }*/
@@ -779,27 +855,38 @@ void JcJ(){
 int main() {
   Joueur j1;
   Joueur j2;
+  srand(time(NULL));  // [ORDI] initialise le hasard une seule fois
+
+  puts("Bienvenue dans la Bataille Navale !");
+  bool robot = lireModeOrdinateur();  // [ORDI]
 
   initialiserJoueur(&j1);
   initialiserJoueur(&j2);
   lireNom(&j1, 1);
-  lireNom(&j2, 2);
-
-  puts("Bienvenue dans la Bataille Navale !");
-  puts(
-      "Le jeu n'est disponible quand JcJ pour le moment Joueur 2 détourner le "
-      "regard ");
+  if (robot) {  // [ORDI] pas de nom a saisir pour le robot
+    strcpy(j2.nom, "Ordinateur");
+  } else {
+    lireNom(&j2, 2);
+    puts("Joueur 2, détournez le regard pendant le placement de Joueur 1.");
+  }
 
   if (AUTO_PLACEMENT) {
     placerAuto(&j1);
-    placerAuto(&j2);
+    if (robot)
+      placerAleatoire(&j2);  // [ORDI]
+    else
+      placerAuto(&j2);
   } else {
     printf("%s, placez vos bateaux.\n", j1.nom);
     ModifierBateau(j1.grille, j1.bateaux);
-    printf("%s, placez vos bateaux.\n", j2.nom);
-    ModifierBateau(j2.grille, j2.bateaux);
+    if (robot) {  // [ORDI] le robot place ses bateaux au hasard, sans affichage
+      placerAleatoire(&j2);
+    } else {
+      printf("%s, placez vos bateaux.\n", j2.nom);
+      ModifierBateau(j2.grille, j2.bateaux);
+    }
   }
-  seBattre(&j1, &j2);
+  seBattre(&j1, &j2, robot);  // [ORDI] avant : seBattre(&j1, &j2);
 
   return 0;
 }
