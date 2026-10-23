@@ -202,10 +202,41 @@ doxygen Doxyfile
 
 ## Jeux d'essais
 
-Les traces d'exécution (parties rejouées, résultats des mesures de
-comparaison) se trouvent dans le dossier `output/`.
+Les essais se trouvent dans le dossier `output/`.
+Chaque essai a trois fichiers avec le même nom :
 
-Vous devrez expliquer comment obtenir ces traces.
+- `partie-01.in` : les touches tapées par les joueurs.
+- `partie-01.out` : ce que le jeu affiche (grilles, résultat des tirs, coups invalides).
+- `partie-01.err` : les messages d'erreur du jeu.
+
+Les deux sorties sont dans deux fichiers séparés. Pour l'instant, les fichiers `.err` sont vides, car les quatre parties vont jusqu'au bout.
+
+Pour rejouer un essai :
+
+```bash
+./jeu < output/partie-01.in > output/partie-01.out 2> output/partie-01.err
+```
+
+Pour rejouer tous les essais d'un coup :
+
+```bash
+for f in output/partie-*.in; do
+  ./jeu < "$f" > "${f%.in}.out" 2> "${f%.in}.err"
+done
+```
+
+Le `.in` remplace le clavier : il commence par les deux noms, puis le placement des bateaux de chaque joueur, puis les tirs. Le jeu n'utilise pas le hasard pour l'instant, donc une partie rejouée donne toujours le même `.out`.
+
+| Essai       | Ce qu'il teste |
+| ----------- | -------------- |
+| `partie-01` | partie complète, un tir répété d'Alice (refusé), victoire d'Alice |
+| `partie-02` | placement : saisies invalides (menu, position, numéro, direction), case occupée, bateau déjà placé, placement impossible, aucune direction possible, suppression puis replacement, fin refusée. Le nom `Han Tao` est coupé en `Han`. Victoire de Bob |
+| `partie-03` | position hors grille, tir répété de Bob (refusé), victoire de Bob |
+| `partie-04` | tirs sur le patrouilleur : touché sans être coulé (A1 chez Alice, J8 chez Bob), puis coulé chez Bob (J9) avec le dernier tir. Victoire d'Alice |
+
+Dans le tableau "Organisation du projet", remplacer la ligne de `output/` par :
+
+| `output/`                        | jeux d'essais : saisies (`.in`), sorties (`.out`) et erreurs (`.err`)  |
 
 ## Journal des changements
 
